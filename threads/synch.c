@@ -156,6 +156,20 @@ sema_test_helper(void *sema_)
     sema_up(&sema[1]);
   }
 }
+/* Priority Change: The main purpose of this function is to change threads priority
+*/
+
+void donate_priority(struct thread *t, int new_priority){
+  if(t->priority < new_priority){
+    t->priority = new_priority;
+
+    struct lock *lockHolder = t->waitForLock;
+    if(lockHolder != NULL)
+      donate_priority(lockHolder->holder, new_priority);
+    else
+      thread_yield();
+  }
+}
 
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
