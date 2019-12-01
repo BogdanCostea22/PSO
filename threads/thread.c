@@ -344,8 +344,9 @@ void thread_set_priority(int new_priority)
   struct thread *current_thread = thread_current();
   
   current_thread->basePriority = new_priority;
-  if(current_thread->priority < new_priority)
+  if(!current_thread->haveWaitingThreads)
     current_thread->priority = new_priority;
+
 
   if (!list_empty(&ready_list))
   {
@@ -362,7 +363,8 @@ void thread_set_priority(int new_priority)
 /* Returns the current thread's priority. */
 int thread_get_priority(void)
 {
-  return thread_current()->priority;
+  struct thread* current_thread = thread_current();
+  return current_thread->priority;
 }
 
 /* Sets the current thread's nice value to NICE. */

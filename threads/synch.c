@@ -215,6 +215,7 @@ void lock_acquire(struct lock *lock)
     struct thread *current_thread = thread_current();
 
     current_thread->waitForLock = lock;
+    current_thread->haveWaitingThreads = true;
     list_push_back(&lock->threads, &current_thread->lock_elem);
     donate_priority(lock->holder, current_thread->priority);
   }
