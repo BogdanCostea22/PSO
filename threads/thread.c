@@ -476,6 +476,7 @@ init_thread(struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *)t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->waitForLock = NULL;
   list_push_back(&all_list, &t->allelem);
 }
 
@@ -598,4 +599,19 @@ bool compare_priority(const struct list_elem *a, const struct list_elem *b, void
   struct thread *bthread = list_entry(b, struct thread, elem);
 
   return athread->priority > bthread->priority;
+}
+
+/*Refresh ready list*/
+void refresh_ready_list(void){
+  enum intr_level old_level = intr_disable();
+  if (!list_empty(&ready_list))
+  {
+    struct list_elem *first = list_front(&ready_list);
+    struct thread *firstThread = list_entry(first,struct thread, elem);
+    if (firstThread->priority > thread_current()->priority)
+    {
+      thread_yield();
+    }
+  }
+  intr_set_level(old_level);
 }
