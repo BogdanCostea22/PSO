@@ -156,6 +156,22 @@ sema_test_helper(void *sema_)
     sema_up(&sema[1]);
   }
 }
+/* Priority Change: The main purpose of this function is to change threads priority
+*/
+
+void donate_priority(struct thread *t, int new_priority){
+  if(t->priority < new_priority){
+    t->priority = new_priority;
+
+    refresh_ready_list();
+
+    struct lock *lockHolder = t->waitForLock;
+    if(lockHolder != NULL)
+      donate_priority(lockHolder->holder, new_priority);
+    else
+      thread_yield();
+  }
+}
 
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
@@ -177,6 +193,7 @@ void lock_init(struct lock *lock)
   ASSERT(lock != NULL);
 
   lock->holder = NULL;
+  list_init(&lock->threads);
   sema_init(&lock->semaphore, 1);
 }
 
@@ -193,6 +210,15 @@ void lock_acquire(struct lock *lock)
   ASSERT(lock != NULL);
   ASSERT(!intr_context());
   ASSERT(!lock_held_by_current_thread(lock));
+
+  if(lock->holder  != NULL){
+    struct thread *current_thread = thread_current();
+
+    current_thread->waitForLock = lock;
+    current_thread->haveWaitingThreads = true;
+    list_push_back(&lock->threads, &current_thread->lock_elem);
+    donate_priority(lock->holder, current_thread->priority);
+  }
 
   sema_down(&lock->semaphore);
   lock->holder = thread_current();
@@ -216,6 +242,13 @@ bool lock_try_acquire(struct lock *lock)
     lock->holder = thread_current();
   return success;
 }
+bool compare_p(const struct list_elem *a, const struct list_elem *b, void *aux){
+
+  struct thread *athread = list_entry(a, struct thread, lock_elem);
+  struct thread *bthread = list_entry(b, struct thread, lock_elem);
+
+  return athread->priority > bthread->priority;
+}
 
 /* Releases LOCK, which must be owned by the current thread.
 
@@ -227,8 +260,29 @@ void lock_release(struct lock *lock)
   ASSERT(lock != NULL);
   ASSERT(lock_held_by_current_thread(lock));
 
+  enum intr_level old_level ;
+  old_level = intr_disable();
+
   lock->holder = NULL;
+  
+  if(!list_empty(&lock->threads)){
+  struct thread *current_thread = thread_current();
+
+  list_sort(&lock->threads, compare_p, NULL);  
+  struct list_elem *first = list_pop_front(&lock->threads);
+  struct thread *firstThread = list_entry(first,struct thread, lock_elem);
+
+    //Change thread priority
+  current_thread->priority = current_thread->basePriority;
+  
+  lock->holder = firstThread;
+  // thread_unblock(firstThread);
+  // thread_yield();
+  }
+  
   sema_up(&lock->semaphore);
+
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
